@@ -15,14 +15,38 @@ jobs:
     - name: Setup Salesforce CLI
       run: npm install -g @salesforce/cli
 
+    - name: Debug - Check if secret exists
+      run: |
+        echo "Auth URL length: ${#SALESFORCE_AUTH_URL}"
+        echo "Org Alias: $SALESFORCE_ORG_ALIAS"
+      env:
+        SALESFORCE_AUTH_URL: ${{ secrets.SALESFORCE_AUTH_URL }}
+        SALESFORCE_ORG_ALIAS: ${{ secrets.SALESFORCE_ORG_ALIAS }}
+
     - name: Authenticate to Salesforce
       run: |
-        echo "${{ secrets.SALESFORCE_AUTH_URL }}" > auth.txt
-        sf org login sfdx-url --sfdx-url-file auth.txt --alias ${{ secrets.SALESFORCE_ORG_ALIAS }}
-        rm auth.txt
+        # Create auth file safely
+        if [ -n "$SALESFORCE_AUTH_URL" ]; then
+          echo "$SALESFORCE_AUTH_URL" > auth.txt
+          echo "Auth file created successfully"
+          cat auth.txt | head -c 50  # Show first 50 chars for verification
+          echo "..."
+        else
+          echo "ERROR: SALESFORCE_AUTH_URL is empty!"
+          exit 1
+        fi
+        
+        # Authenticate
+        sf org login sfdx-url --sfdx-url-file auth.txt --alias $SALESFORCE_ORG_ALIAS
+        rm -f auth.txt
+      env:
+        SALESFORCE_AUTH_URL: ${{ secrets.SALESFORCE_AUTH_URL }}
+        SALESFORCE_ORG_ALIAS: ${{ secrets.SALESFORCE_ORG_ALIAS }}
 
     - name: Deploy to Salesforce
       run: |
         echo "🚀 Deploying to Salesforce..."
-        sf project deploy start --target-org ${{ secrets.SALESFORCE_ORG_ALIAS }}
+        sf project deploy start --target-org $SALESFORCE_ORG_ALIAS
         echo "✅ Deployment completed!"
+      env:
+        SALESFORCE_ORG_ALIAS: ${{ secrets.SALESFORCE_ORG_ALIAS }}
