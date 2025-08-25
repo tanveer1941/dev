@@ -1,0 +1,141 @@
+name: Salesforce CI/CD Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [ main ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install Prettier
+      run: npm install -g prettier
+
+    - name: Check code formatting with Prettier
+      run: |
+        # Create basic prettier config if it doesn't exist
+        if [ ! -f .prettierrc ]; then
+          echo '{
+            "trailingComma": "es5",
+            "tabWidth": 2,
+            "semi": true,
+            "singleQuote": true,
+            "printWidth": 100
+          }' > .prettierrc
+        fi
+        
+        # Check formatting without modifying files
+        if ! prettier --check "**/*.{cls,js,html,css,xml,json,md}" --ignore-path .gitignore; then
+          echo "❌ Code formatting issues found. Run 'prettier --write' locally to fix."
+          exit 1
+        else
+          echo "✅ Code formatting is perfect!"
+        fi
+
+  test-in-scratch-org:
+    needs: code-quality
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Salesforce CLI
+      run: npm install -g @salesforce/cli
+
+    - name: Create scratch org definition file
+      run: |
+        cat << EOF > scratch-org-config.json
+        {
+          "orgName": "Test Org",
+          "edition": "Developer",
+          "features": ["EnableSetPasswordInApi"],
+          "settings": {
+            "lightningExperienceSettings": {
+              "enableS1DesktopEnabled": true
+            },
+            "securitySettings": {
+              "passwordPolicies": {
+                "enableSetPasswordInApi": true
+              }
+            },
+            "mobileSettings": {
+              "enableS1EncryptedStoragePref2": false
+            }
+          }
+        }
+        EOF
+
+    - name: Create scratch org
+      run: |
+        sf org create scratch --definition-file scratch-org-config.json --alias test-scratch --duration-days 1 --set-default
+        echo "🎯 Scratch org created successfully!"
+
+    - name: Deploy to scratch org
+      run: |
+        echo "🚀 Deploying to scratch org..."
+        sf project deploy start --target-org test-scratch
+        echo "✅ Scratch org deployment completed!"
+
+    - name: Run tests in scratch org
+      run: |
+        echo "🧪 Running tests in scratch org..."
+        sf apex run test --target-org test-scratch --result-format human --code-coverage
+        
+        # Check if tests passed
+        if [ $? -eq 0 ]; then
+          echo "✅ All tests passed in scratch org!"
+        else
+          echo "❌ Tests failed in scratch org!"
+          exit 1
+        fi
+
+    - name: Delete scratch org
+      if: always()
+      run: |
+        echo "🧹 Cleaning up scratch org..."
+        sf org delete scratch --target-org test-scratch --no-prompt || echo "Scratch org already deleted or not found"
+
+  deploy-to-dev:
+    needs: test-in-scratch-org
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'  # Only run on push to main, not on PRs
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Salesforce CLI
+      run: npm install -g @salesforce/cli
+
+    - name: Authenticate to Dev Org
+      run: |
+        echo "${{ secrets.SALESFORCE_AUTH_URL }}" > auth.txt
+        sf org login sfdx-url --sfdx-url-file auth.txt --alias ${{ secrets.SALESFORCE_ORG_ALIAS }}
+        rm -f auth.txt
+
+    - name: Deploy to Dev Org
+      run: |
+        echo "🚀 Deploying to Dev Org..."
+        sf project deploy start --target-org ${{ secrets.SALESFORCE_ORG_ALIAS }}
+        echo "✅ Dev org deployment completed!"
+
+    - name: Create deployment summary
+      run: |
+        echo "## 🎉 CI/CD Pipeline Complete!" >> $GITHUB_STEP_SUMMARY
+        echo "### 📊 Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Code formatting validated" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Scratch org testing passed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Dev org deployment successful" >> $GITHUB_STEP_SUMMARY
+        echo "- 🕒 Completed at: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔖 Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
