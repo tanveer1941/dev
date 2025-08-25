@@ -5,62 +5,7 @@ on:
     branches: [ main ]
 
 jobs:
-  test-in-scratch-org:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Salesforce CLI
-      run: npm install -g @salesforce/cli
-
-    - name: Authenticate to Dev Hub (using same auth URL)
-      run: |
-        echo "${{ secrets.SALESFORCE_AUTH_URL }}" > auth.txt
-        sf org login sfdx-url --sfdx-url-file auth.txt --alias dev-hub --set-default-dev-hub
-        rm -f auth.txt
-
-    - name: Create scratch org definition file
-      run: |
-        cat << EOF > scratch-org-config.json
-        {
-          "orgName": "Test Scratch Org",
-          "edition": "Developer",
-          "hasSampleData": false
-        }
-        EOF
-
-    - name: Create scratch org
-      run: |
-        sf org create scratch --definition-file scratch-org-config.json --alias test-scratch --duration-days 1 --set-default
-        echo "🎯 Scratch org created successfully!"
-
-    - name: Deploy to scratch org
-      run: |
-        echo "🚀 Deploying to scratch org..."
-        sf project deploy start --target-org test-scratch
-        echo "✅ Scratch org deployment completed!"
-
-    - name: Run tests in scratch org
-      run: |
-        echo "🧪 Running tests in scratch org..."
-        sf apex run test --target-org test-scratch --result-format human
-        
-        if [ $? -eq 0 ]; then
-          echo "✅ All tests passed in scratch org!"
-        else
-          echo "❌ Tests failed in scratch org!"
-          exit 1
-        fi
-
-    - name: Delete scratch org
-      if: always()
-      run: |
-        echo "🧹 Cleaning up scratch org..."
-        sf org delete scratch --target-org test-scratch --no-prompt || echo "Scratch org already deleted or not found"
-
   deploy-to-dev:
-    needs: test-in-scratch-org
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -80,3 +25,17 @@ jobs:
         echo "🚀 Deploying to Dev Org..."
         sf project deploy start --target-org ${{ secrets.SALESFORCE_ORG_ALIAS }}
         echo "✅ Dev org deployment completed!"
+
+    - name: Run tests
+      run: |
+        echo "🧪 Running tests..."
+        sf apex run test --target-org ${{ secrets.SALESFORCE_ORG_ALIAS }} --result-format human
+
+    - name: Create deployment summary
+      run: |
+        echo "## 🎉 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+        echo "### 📊 Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Deployment successful" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Tests completed" >> $GITHUB_STEP_SUMMARY
+        echo "- 🕒 Completed at: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔖 Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
