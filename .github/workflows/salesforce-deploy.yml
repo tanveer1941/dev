@@ -49,4 +49,4 @@ jobs:
         sf project deploy start --target-org $SALESFORCE_ORG_ALIAS
         echo "✅ Deployment completed!"
       env:
-        SALESFORCE_ORG_ALIAS: ${{ secrets.SALESFORCE_ORG_ALIAS }}
+        SALESFORCE_ORG_ALIAS: ${{ secrets.SALESFORCE_ORG_ALIAS }} 
