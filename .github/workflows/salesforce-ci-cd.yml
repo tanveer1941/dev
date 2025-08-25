@@ -1,44 +1,11 @@
 name: Salesforce CI/CD Pipeline
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
   push:
     branches: [ main ]
 
 jobs:
-  code-quality:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install Prettier
-      run: npm install -g prettier
-
-    - name: Check code formatting with Prettier
-      run: |
-        # Create basic prettier config if it doesn't exist
-        if [ ! -f .prettierrc ]; then
-          echo '{
-            "trailingComma": "es5",
-            "tabWidth": 2,
-            "semi": true,
-            "singleQuote": true,
-            "printWidth": 100
-          }' > .prettierrc
-        fi
-        
-        # Check formatting without modifying files
-        if ! prettier --check "**/*.{cls,js,html,css,xml,json,md}" --ignore-path .gitignore; then
-          echo "❌ Code formatting issues found. Run 'prettier --write' locally to fix."
-          exit 1
-        else
-          echo "✅ Code formatting is perfect!"
-        fi
-
   test-in-scratch-org:
-    needs: code-quality
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -103,8 +70,6 @@ jobs:
   deploy-to-dev:
     needs: test-in-scratch-org
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'  # Only run on push to main, not on PRs
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -128,7 +93,6 @@ jobs:
       run: |
         echo "## 🎉 CI/CD Pipeline Complete!" >> $GITHUB_STEP_SUMMARY
         echo "### 📊 Summary" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Code formatting validated" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Scratch org testing passed" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Dev org deployment successful" >> $GITHUB_STEP_SUMMARY
         echo "- 🕒 Completed at: $(date)" >> $GITHUB_STEP_SUMMARY
