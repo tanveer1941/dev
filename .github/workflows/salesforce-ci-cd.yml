@@ -16,7 +16,7 @@ jobs:
 
     - name: Authenticate to Dev Hub
       run: |
-        echo "${{ secrets.SALESFORCE_AUTH_URL }}" > auth.txt
+        echo "${{ secrets.SALESFORCE_DEVHUB_AUTH_URL }}" > auth.txt
         sf org login sfdx-url --sfdx-url-file auth.txt --alias dev-hub --set-default-dev-hub
         rm -f auth.txt
 
@@ -24,17 +24,13 @@ jobs:
       run: |
         cat << EOF > scratch-org-config.json
         {
-          "orgName": "Test Org",
+          "orgName": "Test Scratch Org",
           "edition": "Developer",
-          "features": ["EnableSetPasswordInApi"],
+          "hasSampleData": false,
+          "features": [],
           "settings": {
             "lightningExperienceSettings": {
               "enableS1DesktopEnabled": true
-            },
-            "securitySettings": {
-              "passwordPolicies": {
-                "enableSetPasswordInApi": true
-              }
             },
             "mobileSettings": {
               "enableS1EncryptedStoragePref2": false
@@ -57,7 +53,7 @@ jobs:
     - name: Run tests in scratch org
       run: |
         echo "🧪 Running tests in scratch org..."
-        sf apex run test --target-org test-scratch --result-format human --code-coverage
+        sf apex run test --target-org test-scratch --result-format human
         
         # Check if tests passed
         if [ $? -eq 0 ]; then
