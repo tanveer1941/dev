@@ -14,9 +14,9 @@ jobs:
     - name: Setup Salesforce CLI
       run: npm install -g @salesforce/cli
 
-    - name: Authenticate to Dev Hub
+    - name: Authenticate to Dev Hub (using same auth URL)
       run: |
-        echo "${{ secrets.SALESFORCE_DEVHUB_AUTH_URL }}" > auth.txt
+        echo "${{ secrets.SALESFORCE_AUTH_URL }}" > auth.txt
         sf org login sfdx-url --sfdx-url-file auth.txt --alias dev-hub --set-default-dev-hub
         rm -f auth.txt
 
@@ -26,16 +26,7 @@ jobs:
         {
           "orgName": "Test Scratch Org",
           "edition": "Developer",
-          "hasSampleData": false,
-          "features": [],
-          "settings": {
-            "lightningExperienceSettings": {
-              "enableS1DesktopEnabled": true
-            },
-            "mobileSettings": {
-              "enableS1EncryptedStoragePref2": false
-            }
-          }
+          "hasSampleData": false
         }
         EOF
 
@@ -55,7 +46,6 @@ jobs:
         echo "🧪 Running tests in scratch org..."
         sf apex run test --target-org test-scratch --result-format human
         
-        # Check if tests passed
         if [ $? -eq 0 ]; then
           echo "✅ All tests passed in scratch org!"
         else
@@ -90,12 +80,3 @@ jobs:
         echo "🚀 Deploying to Dev Org..."
         sf project deploy start --target-org ${{ secrets.SALESFORCE_ORG_ALIAS }}
         echo "✅ Dev org deployment completed!"
-
-    - name: Create deployment summary
-      run: |
-        echo "## 🎉 CI/CD Pipeline Complete!" >> $GITHUB_STEP_SUMMARY
-        echo "### 📊 Summary" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Scratch org testing passed" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Dev org deployment successful" >> $GITHUB_STEP_SUMMARY
-        echo "- 🕒 Completed at: $(date)" >> $GITHUB_STEP_SUMMARY
-        echo "- 🔖 Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
